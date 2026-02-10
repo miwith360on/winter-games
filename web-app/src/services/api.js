@@ -1,27 +1,38 @@
 // Winter Games API Service for Web App
-// Central API configuration and fetching logic
+// SportsRadar API Integration
 
-const API_BASE_URL = 'https://api.npoint.io'; // Using npoint.io as a free API host
-// You can host your own API or use: Firebase, Supabase, or any backend
+// SportsRadar API Configuration
+const SPORTRADAR_API_KEY = import.meta.env.VITE_SPORTRADAR_API_KEY || '4p5OoGQaBjBMe4ChDsY9DsetwbefZgonAR3dsQBX';
+const ACCESS_LEVEL = import.meta.env.VITE_SPORTRADAR_ACCESS_LEVEL || 'trial';
 
-// API Endpoints - Replace these with your own endpoints
-const ENDPOINTS = {
-  venues: 'https://api.npoint.io/bc411b97bfc06a7d0c2e',
-  medals: 'https://api.npoint.io/d1e2f3a4b5c6', // Replace with your endpoint
-  injuries: 'https://api.npoint.io/a1b2c3d4e5f6', // Replace with your endpoint
-  performance: 'https://api.npoint.io/f6e5d4c3b2a1', // Replace with your endpoint
-  dnf: 'https://api.npoint.io/1a2b3c4d5e6f', // Replace with your endpoint
-  liveEvents: 'https://api.npoint.io/e6d5c4b3a2f1', // Replace with your endpoint
+// SportsRadar API Endpoints
+const SPORTRADAR_BASE = {
+  winterSports: `https://api.sportradar.com/wintersports/${ACCESS_LEVEL}/v1/en`,
+  olympics: `https://api.sportradar.com/olympics/${ACCESS_LEVEL}/v1/en`,
+  iceHockey: `https://api.sportradar.com/icehockey/${ACCESS_LEVEL}/v3/en`,
 };
 
-// Generic fetch function with error handling
-const fetchAPI = async (endpoint, options = {}) => {
+// Winter Olympics 2026 Season ID (you'll need to get this from /seasons endpoint)
+const WINTER_2026_SEASON_ID = 'sr:season:105357'; // placeholder - will fetch dynamically
+
+// Helper function to convert country codes to flag emojis
+const getCountryFlag = (countryCode) => {
+  const flagMap = {
+    'NOR': '🇳🇴', 'GER': '🇩🇪', 'USA': '🇺🇸', 'CAN': '🇨🇦', 
+    'AUT': '🇦🇹', 'SUI': '🇨🇭', 'ROC': '🏳️', 'JPN': '🇯🇵',
+    'CHN': '🇨🇳', 'FRA': '🇫🇷', 'ITA': '🇮🇹', 'SWE': '🇸🇪',
+    'NED': '🇳🇱', 'KOR': '🇰🇷', 'FIN': '🇫🇮', 'GBR': '🇬🇧',
+  };
+  return flagMap[countryCode] || '🏴';
+};
+
+// Generic fetch function with error handling for SportsRadar API
+const fetchSportsRadar = async (url, useMockOnFail = true) => {
   try {
-    const response = await fetch(endpoint, {
-      ...options,
+    const fullUrl = `${url}${url.includes('?') ? '&' : '?'}api_key=${SPORTRADAR_API_KEY}`;
+    const response = await fetch(fullUrl, {
       headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
+        'Accept': 'application/json',
       },
     });
 
@@ -30,16 +41,62 @@ const fetchAPI = async (endpoint, options = {}) => {
     }
 
     const data = await response.json();
-    return { success: true, data };
+    return { success: true, data, source: 'sportradar' };
   } catch (error) {
-    console.error('API Fetch Error:', error);
+    console.error('SportsRadar API Error:', error);
+    if (useMockOnFail) {
+      console.log('Falling back to mock data');
+      return { success: false, error: error.message, useMock: true };
+    }
     return { success: false, error: error.message };
   }
 };
 
-// Venue/Event Data
+// Venue/Event Data - Fetch from Winter Sports Schedule
 export const getVenues = async () => {
-  // Always return mock data for now since API endpoints don't exist yet
+  try {
+    // Fetch winter sports seasons first
+    const seasonsUrl = `${SPORTRADAR_BASE.winterSports}/seasons.json`;
+    const seasonsResult = await fetchSportsRadar(seasonsUrl);
+    
+    if (seasonsResult.success && !seasonsResult.useMock) {
+      // Get the latest season
+      const latestSeason = seasonsResult.data.seasons?.[0];
+      if (latestSeason && latestSeason.stage_id) {
+        // Fetch schedule for the season
+        const scheduleUrl = `${SPORTRADAR_BASE.winterSports}/stage/${latestSeason.stage_id}/schedule.json`;
+        const scheduleResult = await fetchSportsRadar(scheduleUrl);
+        
+        if (scheduleResult.success && scheduleResult.data.sport_events) {
+          // Map SportsRadar events to our venue format
+          const venues = scheduleResult.data.sport_events.slice(0, 10).map((event, idx) => ({
+            id: idx + 1,
+            name: event.sport_event_context?.venue?.name || 'Unknown Venue',
+            sport: event.sport_event_context?.discipline?.name || 'Winter Sport',
+            event: event.name || 'Event',
+            status: event.sport_event_status?.status || 'Scheduled',
+            latitude: event.sport_event_context?.venue?.latitude || 45.4642,
+            longitude: event.sport_event_context?.venue?.longitude || 9.1900,
+            score: event.sport_event_status?.home_score ? 
+              `${event.sport_event_status.home_score} - ${event.sport_event_status.away_score}` : 'TBD',
+            winner: event.sport_event_status?.winner_id ? 'TBD' : null,
+            why: 'Live data from SportsRadar',
+            term: `${event.sport_event_context?.discipline?.name || ''} event`,
+            attendance: 0,
+            temperature: '-5°C',
+          }));
+          
+          if (venues.length > 0) {
+            return { success: true, data: venues, source: 'sportradar' };
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching venues from SportsRadar:', error);
+  }
+
+  // Fallback to mock data
   return {
     success: true,
     data: [
@@ -141,9 +198,55 @@ export const getVenues = async () => {
   return result;
 };
 
-// Medal Standings
+// Medal Standings - Fetch from Olympic Medals API
 export const getMedalStandings = async () => {
-  // Return mock data directly
+  try {
+    // First get Olympic seasons to find Winter 2026
+    const seasonsUrl = `${SPORTRADAR_BASE.olympics}/seasons.json`;
+    const seasonsResult = await fetchSportsRadar(seasonsUrl);
+    
+    if (seasonsResult.success && !seasonsResult.useMock) {
+      // Find Winter 2026 season (or use latest winter olympics season)
+      const winterSeasons = seasonsResult.data.seasons?.filter(s => 
+        s.name?.toLowerCase().includes('winter') || s.id === WINTER_2026_SEASON_ID
+      );
+      
+      const targetSeason = winterSeasons?.[0];
+      if (targetSeason && targetSeason.id) {
+        // Fetch medal table for this season
+        const medalUrl = `${SPORTRADAR_BASE.olympics}/season/${targetSeason.id}/table.json`;
+        const medalResult = await fetchSportsRadar(medalUrl);
+        
+        if (medalResult.success && medalResult.data.standings) {
+          // Map SportsRadar medal data to our format
+          const medals = medalResult.data.standings.map((standing, idx) => {
+            const country = standing.competitor;
+            return {
+              rank: idx + 1,
+              country: country.name,
+              countryCode: country.abbreviation || 'XXX',
+              flag: getCountryFlag(country.abbreviation),
+              gold: standing.gold_medals || 0,
+              silver: standing.silver_medals || 0,
+              bronze: standing.bronze_medals || 0,
+              total: (standing.gold_medals || 0) + (standing.silver_medals || 0) + (standing.bronze_medals || 0),
+              trending: 'stable',
+              whyWinning: `Real-time data from Winter Olympics 2026`,
+              recentMedals: [],
+            };
+          });
+          
+          if (medals.length > 0) {
+            return { success: true, data: medals, source: 'sportradar' };
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching medals from SportsRadar:', error);
+  }
+
+  // Fallback to mock data
   return {
       success: true,
       data: [
