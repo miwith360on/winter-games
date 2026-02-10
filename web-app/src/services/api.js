@@ -39,15 +39,58 @@ const fetchAPI = async (endpoint, options = {}) => {
 
 // Venue/Event Data
 export const getVenues = async () => {
-  const result = await fetchAPI(ENDPOINTS.venues);
-  
-  if (!result.success) {
-    // Fallback mock data
-    return {
-      success: true,
-      data: [
-        {
-          id: 1,
+  // Always return mock data for now since API endpoints don't exist yet
+  return {
+    success: true,
+    data: [
+      {
+        id: 1,
+        name: 'San Siro Stadium',
+        sport: 'Hockey',
+        event: "Women's Hockey: USA vs SUI",
+        status: 'Live 3rd Period',
+        latitude: 45.4934,
+        longitude: 9.1155,
+        score: 'USA 4 - 1 SUI',
+        winner: null,
+        why: 'USA is dominating possession. Switzerland is taking too many penalties (4 minor penalties), giving USA easy power play goals.',
+        term: 'Power Play: When one team has more players on ice because the other team has a penalty.',
+        attendance: 18234,
+        temperature: '2°C',
+      },
+      {
+        id: 2,
+        name: 'Cortina',
+        sport: 'Skiing',
+        event: "Women's Freeski Slopestyle",
+        status: 'Finished',
+        latitude: 46.5391,
+        longitude: 12.1383,
+        score: '95.50',
+        winner: 'Eileen Gu (CHN)',
+        why: 'She landed a 1620 mute grab—a trick no other woman attempted today. Her amplitude (height) was 3ft higher than the silver medalist.',
+        term: 'Amplitude: How high a skier goes in the air.',
+        attendance: 8500,
+        temperature: '-5°C',
+      },
+      {
+        id: 3,
+        name: 'Val di Fiemme',
+        sport: 'Ski Jumping',
+        event: "Men's Ski Jumping",
+        status: 'Starts at 19:00',
+        latitude: 46.4186,
+        longitude: 11.6486,
+        score: 'TBD',
+        winner: 'TBD',
+        why: 'Watch for Ryoyu Kobayashi. He uses a lower aggressive posture to cut wind resistance.',
+        term: 'Telemark Landing: Landing with one foot ahead of the other to score style points.',
+        attendance: 0,
+        temperature: '-8°C',
+      },
+    ],
+  };
+};
           name: 'San Siro Stadium',
           sport: 'Hockey',
           event: "Women's Hockey: USA vs SUI",
@@ -100,11 +143,8 @@ export const getVenues = async () => {
 
 // Medal Standings
 export const getMedalStandings = async () => {
-  const result = await fetchAPI(ENDPOINTS.medals);
-  
-  if (!result.success) {
-    // Fallback mock data
-    return {
+  // Return mock data directly
+  return {
       success: true,
       data: [
         {
@@ -218,18 +258,12 @@ export const getMedalStandings = async () => {
         },
       ],
     };
-  }
-  
-  return result;
 };
 
 // Injury Report & DNF/DQ Data
 export const getInjuryReport = async () => {
-  const result = await fetchAPI(ENDPOINTS.injuries);
-  
-  if (!result.success) {
-    // Fallback mock data
-    return {
+  // Return mock data directly
+  return {
       success: true,
       data: [
         {
@@ -294,17 +328,11 @@ export const getInjuryReport = async () => {
         },
       ],
     };
-  }
-  
-  return result;
 };
 
 // DNF (Did Not Finish) and DQ (Disqualified) Data
 export const getDNFandDQ = async () => {
-  const result = await fetchAPI(ENDPOINTS.dnf);
-  
-  if (!result.success) {
-    // Fallback mock data
+  // Return mock data directly
     return {
       success: true,
       data: [
@@ -375,18 +403,12 @@ export const getDNFandDQ = async () => {
         },
       ],
     };
-  }
-  
-  return result;
 };
 
 // Performance Analytics
 export const getPerformanceAnalytics = async (eventId) => {
-  const result = await fetchAPI(ENDPOINTS.performance);
-  
-  if (!result.success) {
-    // Fallback mock data
-    return {
+  // Return mock data directly
+  return {
       success: true,
       data: {
         eventName: "Women's Hockey: USA vs SUI",
@@ -424,17 +446,12 @@ export const getPerformanceAnalytics = async (eventId) => {
         },
       },
     };
-  }
-  
-  return result;
 };
 
 // Live Events Stream
 export const getLiveEvents = async () => {
-  const result = await fetchAPI(ENDPOINTS.liveEvents);
-  
-  if (!result.success) {
-    return {
+  // Return mock data directly
+  return {
       success: true,
       data: [
         {
@@ -466,9 +483,6 @@ export const getLiveEvents = async () => {
         },
       ],
     };
-  }
-  
-  return result;
 };
 
 // Combined Dashboard Data
