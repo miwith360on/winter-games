@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import QRCode from 'qrcode.react'
 import './App.css'
-import { getMedalStandings, getInjuryReport, getDNFandDQ, getVenues as fetchVenues } from './services/api'
+import { getMedalStandings, getInjuryReport, getDNFandDQ, getVenueWeather, getVenues as fetchVenues } from './services/api'
 
 // Custom marker icons
 delete L.Icon.Default.prototype._getIconUrl
@@ -30,6 +30,7 @@ export default function App() {
   const [injuries, setInjuries] = useState([])
   const [dnfData, setDnfData] = useState([])
   const [loading, setLoading] = useState(true)
+  const [venueWeather, setVenueWeather] = useState(null)
 
   // Fetch all data on component mount
   useEffect(() => {
@@ -41,6 +42,27 @@ export default function App() {
       return () => clearInterval(interval)
     }
   }, [liveUpdates])
+
+  useEffect(() => {
+    let isActive = true
+
+    const loadWeather = async () => {
+      if (!selectedVenue) {
+        setVenueWeather(null)
+        return
+      }
+
+      const result = await getVenueWeather(selectedVenue.latitude, selectedVenue.longitude)
+      if (isActive) {
+        setVenueWeather(result.success ? result.data : null)
+      }
+    }
+
+    loadWeather()
+    return () => {
+      isActive = false
+    }
+  }, [selectedVenue])
 
   const fetchAllData = async () => {
     try {
@@ -80,6 +102,8 @@ export default function App() {
       details: dnf.reason,
     })),
   ]
+
+  const hasDnf = Array.isArray(dnfData) && dnfData.length > 0
 
   const getRiskLevel = (venue) => {
     if (venue.status.includes('Live')) return { level: 'LIVE', percent: 75, color: '#00d4ff' }
@@ -255,21 +279,25 @@ export default function App() {
       )}
 
       {/* Separate DNF/DQ Section */}
-      <h2 style={{ marginTop: '30px', fontSize: '18px', color: '#333' }}>❌ DNF & DQ Reports</h2>
-      {(Array.isArray(dnfData) ? dnfData : []).map((item) => (
-        <div key={item.id} className="dnf-card">
-          <div className="dnf-header">
-            <span className={`dnf-badge ${item.type.toLowerCase()}`}>{item.type}</span>
-            <span className="dnf-date">{item.date}</span>
-          </div>
-          <h3>{item.flag} {item.athlete} - {item.country}</h3>
-          <p className="dnf-event">{item.event} ({item.sport})</p>
-          <p className="dnf-reason">{item.reason}</p>
-          {item.videoAvailable && (
-            <span className="video-badge">📹 Video Available</span>
-          )}
-        </div>
-      ))}
+      {hasDnf && (
+        <>
+          <h2 style={{ marginTop: '30px', fontSize: '18px', color: '#333' }}>❌ DNF & DQ Reports</h2>
+          {(Array.isArray(dnfData) ? dnfData : []).map((item) => (
+            <div key={item.id} className="dnf-card">
+              <div className="dnf-header">
+                <span className={`dnf-badge ${item.type.toLowerCase()}`}>{item.type}</span>
+                <span className="dnf-date">{item.date}</span>
+              </div>
+              <h3>{item.flag} {item.athlete} - {item.country}</h3>
+              <p className="dnf-event">{item.event} ({item.sport})</p>
+              <p className="dnf-reason">{item.reason}</p>
+              {item.videoAvailable && (
+                <span className="video-badge">📹 Video Available</span>
+              )}
+            </div>
+          ))}
+        </>
+      )}
     </div>
   )
 
@@ -371,6 +399,12 @@ export default function App() {
                 <label>Status:</label>
                 <span>{selectedVenue.status}</span>
               </div>
+              {venueWeather && (
+                <div className="info-row">
+                  <label>Weather:</label>
+                  <span>{venueWeather.tempC}°C, {venueWeather.summary} (wind {venueWeather.windKph} kph)</span>
+                </div>
+              )}
             </div>
 
             <div className="analyst-box">

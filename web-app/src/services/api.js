@@ -1,9 +1,11 @@
 // Winter Games API Service for Web App
 // SportsRadar API Integration
 
-// SportsRadar API Configuration
-const SPORTRADAR_API_KEY = import.meta.env.VITE_SPORTRADAR_API_KEY || '4p5OoGQaBjBMe4ChDsY9DsetwbefZgonAR3dsQBX';
+// API Configuration
+const SPORTRADAR_API_KEY = import.meta.env.VITE_SPORTRADAR_API_KEY || '';
 const ACCESS_LEVEL = import.meta.env.VITE_SPORTRADAR_ACCESS_LEVEL || 'trial';
+const GNEWS_API_KEY = import.meta.env.VITE_GNEWS_API_KEY || '';
+const OPENWEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY || '';
 
 // SportsRadar API Endpoints
 const SPORTRADAR_BASE = {
@@ -11,6 +13,9 @@ const SPORTRADAR_BASE = {
   olympics: `https://api.sportradar.com/olympics/${ACCESS_LEVEL}/v1/en`,
   iceHockey: `https://api.sportradar.com/icehockey/${ACCESS_LEVEL}/v3/en`,
 };
+
+const GNEWS_BASE_URL = 'https://gnews.io/api/v4/search';
+const OPENWEATHER_BASE_URL = 'https://api.openweathermap.org/data/2.5/weather';
 
 // Winter Olympics 2026 Season ID (you'll need to get this from /seasons endpoint)
 const WINTER_2026_SEASON_ID = 'sr:season:105357'; // placeholder - will fetch dynamically
@@ -59,6 +64,80 @@ const fetchSportsRadar = async (url, useMockOnFail = true) => {
     }
     return { success: false, error: error.message };
   }
+};
+
+const fetchGNews = async (query, max = 10) => {
+  if (!GNEWS_API_KEY) {
+    return { success: false, error: 'Missing GNews API key', data: [] };
+  }
+
+  try {
+    const params = new URLSearchParams({
+      q: query,
+      lang: 'en',
+      max: String(max),
+      token: GNEWS_API_KEY,
+      sortby: 'publishedAt',
+    });
+    const response = await fetch(`${GNEWS_BASE_URL}?${params.toString()}`);
+
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return { success: true, data, source: 'gnews' };
+  } catch (error) {
+    console.error('GNews API Error:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+};
+
+const fetchOpenWeather = async (lat, lon) => {
+  if (!OPENWEATHER_API_KEY || lat == null || lon == null) {
+    return { success: false, error: 'Missing OpenWeather API key', data: null };
+  }
+
+  try {
+    const params = new URLSearchParams({
+      lat: String(lat),
+      lon: String(lon),
+      units: 'metric',
+      appid: OPENWEATHER_API_KEY,
+    });
+    const response = await fetch(`${OPENWEATHER_BASE_URL}?${params.toString()}`);
+
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return { success: true, data, source: 'openweather' };
+  } catch (error) {
+    console.error('OpenWeather API Error:', error);
+    return { success: false, error: error.message, data: null };
+  }
+};
+
+const extractHeadlineSubject = (title) => {
+  if (!title) return 'Winter Games';
+  const cleaned = title.split(' - ')[0].split(' — ')[0].trim();
+  const words = cleaned.split(/
+|\s+/).filter(Boolean);
+  return words.slice(0, 4).join(' ');
+};
+
+const detectSeverity = (text) => {
+  const lower = (text || '').toLowerCase();
+  if (lower.includes('fracture') || lower.includes('surgery') || lower.includes('torn')) return 'severe';
+  if (lower.includes('questionable') || lower.includes('doubtful')) return 'moderate';
+  return 'minor';
+};
+
+const detectDnfType = (text) => {
+  const lower = (text || '').toLowerCase();
+  if (lower.includes('dq') || lower.includes('disqual')) return 'DQ';
+  return 'DNF';
 };
 
 // Venue/Event Data - Fetch from Winter Sports Schedule
@@ -340,147 +419,87 @@ export const getMedalStandings = async () => {
 
 // Injury Report & DNF/DQ Data
 export const getInjuryReport = async () => {
-  // Return mock data directly
-  return {
-      success: true,
-      data: [
-        {
-          id: 1,
-          athlete: 'Mikaela Shiffrin',
-          country: 'USA',
-          countryCode: 'USA',
-          flag: '🇺🇸',
-          sport: 'Alpine Skiing',
-          injury: 'Knee Soreness',
-          status: 'Questionable',
-          severity: 'moderate',
-          date: '2026-02-08',
-          upcomingEvent: 'Giant Slalom',
-          eventDate: '2026-02-10',
-          details: 'Experienced discomfort during training. Team doctors evaluating. May skip event as precaution.',
-        },
-        {
-          id: 2,
-          athlete: 'Connor McDavid',
-          country: 'Canada',
-          countryCode: 'CAN',
-          flag: '🇨🇦',
-          sport: 'Ice Hockey',
-          injury: 'Rest (Load Management)',
-          status: 'Probable',
-          severity: 'minor',
-          date: '2026-02-09',
-          upcomingEvent: 'Semifinal vs Sweden',
-          eventDate: '2026-02-11',
-          details: 'Scheduled rest day. Expected to play in semifinals. No structural damage.',
-        },
-        {
-          id: 3,
-          athlete: 'Akito Watabe',
-          country: 'Japan',
-          countryCode: 'JPN',
-          flag: '🇯🇵',
-          sport: 'Nordic Combined',
-          injury: 'Ankle Sprain',
-          status: 'Out',
-          severity: 'severe',
-          date: '2026-02-07',
-          upcomingEvent: 'Individual Gundersen',
-          eventDate: '2026-02-09',
-          details: 'Fell during training jump. MRI confirmed Grade 2 sprain. Out for remainder of games.',
-        },
-        {
-          id: 4,
-          athlete: 'Kamila Valieva',
-          country: 'ROC',
-          countryCode: 'ROC',
-          flag: '🏳️',
-          sport: 'Figure Skating',
-          injury: 'Back Strain',
-          status: 'Day-to-Day',
-          severity: 'minor',
-          date: '2026-02-09',
-          upcomingEvent: 'Free Skate',
-          eventDate: '2026-02-12',
-          details: 'Minor strain after triple axel. Receiving treatment. Will attempt to compete.',
-        },
-      ],
+  const query = 'Winter Olympics 2026 injury OR injured OR withdrew OR out';
+  const result = await fetchGNews(query, 10);
+
+  if (!result.success || !Array.isArray(result.data?.articles)) {
+    return { success: true, data: [], source: 'gnews' };
+  }
+
+  const data = result.data.articles.map((article, idx) => {
+    const title = article.title || 'Winter Games update';
+    const description = article.description || '';
+    const combinedText = `${title} ${description}`;
+    return {
+      id: idx + 1,
+      athlete: extractHeadlineSubject(title),
+      country: 'News',
+      countryCode: 'NEWS',
+      flag: '📰',
+      sport: 'Winter Games',
+      injury: title,
+      status: 'Reported',
+      severity: detectSeverity(combinedText),
+      date: article.publishedAt ? article.publishedAt.slice(0, 10) : '2026-02-10',
+      upcomingEvent: 'Winter Games 2026',
+      eventDate: article.publishedAt ? article.publishedAt.slice(0, 10) : '2026-02-10',
+      details: description || article.content || 'Source: GNews',
     };
+  });
+
+  return { success: true, data, source: 'gnews' };
 };
 
 // DNF (Did Not Finish) and DQ (Disqualified) Data
 export const getDNFandDQ = async () => {
-  // Return mock data directly
+  const query = 'Winter Olympics 2026 DNF OR DQ OR disqualified OR did not finish OR withdrew';
+  const result = await fetchGNews(query, 10);
+
+  if (!result.success || !Array.isArray(result.data?.articles)) {
+    return { success: true, data: [], source: 'gnews' };
+  }
+
+  const data = result.data.articles.map((article, idx) => {
+    const title = article.title || 'Winter Games update';
+    const description = article.description || '';
+    const combinedText = `${title} ${description}`;
     return {
-      success: true,
-      data: [
-        {
-          id: 1,
-          type: 'DNF',
-          athlete: 'Lindsey Vonn',
-          country: 'USA',
-          flag: '🇺🇸',
-          sport: 'Alpine Skiing',
-          event: "Women's Downhill",
-          date: '2026-02-08',
-          reason: 'Crashed on final turn at 95 km/h. Skis caught edge on icy patch. Walked away uninjured.',
-          videoAvailable: true,
-          timestamp: '1:34.2',
-        },
-        {
-          id: 2,
-          type: 'DNF',
-          athlete: 'Therese Johaug',
-          country: 'Norway',
-          flag: '🇳🇴',
-          sport: 'Cross-Country',
-          event: '30km Mass Start',
-          date: '2026-02-07',
-          reason: 'Ski pole broke at 18km mark. No backup available. Withdrew from race.',
-          videoAvailable: false,
-          timestamp: '18.2km',
-        },
-        {
-          id: 3,
-          type: 'DQ',
-          athlete: 'Natalie Geisenberger',
-          country: 'Germany',
-          flag: '🇩🇪',
-          sport: 'Luge',
-          event: "Women's Singles",
-          date: '2026-02-06',
-          reason: 'Sled runners measured 0.3mm outside regulation width. Disqualified after 3rd run.',
-          videoAvailable: false,
-          timestamp: 'Post-Run 3',
-        },
-        {
-          id: 4,
-          type: 'DQ',
-          athlete: 'Yuzuru Hanyu',
-          country: 'Japan',
-          flag: '🇯🇵',
-          sport: 'Figure Skating',
-          event: "Men's Free Skate",
-          date: '2026-02-09',
-          reason: 'Costume malfunction (loose sequin) during performance. Technical violation under ISU rules.',
-          videoAvailable: true,
-          timestamp: '2:45',
-        },
-        {
-          id: 5,
-          type: 'DNF',
-          athlete: 'Shaun White',
-          country: 'USA',
-          flag: '🇺🇸',
-          sport: 'Snowboarding',
-          event: "Men's Halfpipe",
-          date: '2026-02-08',
-          reason: 'Fell on landing of double cork 1440. Board broke on impact. Could not complete run.',
-          videoAvailable: true,
-          timestamp: 'Run 1, 0:42',
-        },
-      ],
+      id: idx + 1,
+      type: detectDnfType(combinedText),
+      athlete: extractHeadlineSubject(title),
+      country: 'News',
+      flag: '📰',
+      sport: 'Winter Games',
+      event: title,
+      date: article.publishedAt ? article.publishedAt.slice(0, 10) : '2026-02-10',
+      reason: description || article.content || 'Source: GNews',
+      videoAvailable: false,
+      timestamp: 'N/A',
     };
+  });
+
+  return { success: true, data, source: 'gnews' };
+};
+
+export const getVenueWeather = async (lat, lon) => {
+  const result = await fetchOpenWeather(lat, lon);
+  if (!result.success || !result.data) {
+    return { success: false, data: null, source: 'openweather' };
+  }
+
+  const tempC = Math.round(result.data.main?.temp ?? 0);
+  const summary = result.data.weather?.[0]?.description || 'Unknown';
+  const windKph = Math.round((result.data.wind?.speed ?? 0) * 3.6);
+
+  return {
+    success: true,
+    source: 'openweather',
+    data: {
+      tempC,
+      summary,
+      windKph,
+    },
+  };
 };
 
 // Performance Analytics
