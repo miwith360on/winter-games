@@ -106,8 +106,13 @@ export default function App() {
   const hasDnf = Array.isArray(dnfData) && dnfData.length > 0
 
   const getRiskLevel = (venue) => {
-    if (venue.status.includes('Live')) return { level: 'LIVE', percent: 75, color: '#00d4ff' }
-    if (venue.status.includes('Finished')) return { level: 'COMPLETED', percent: 100, color: '#00ff88' }
+    const statusLower = (venue.status || '').toLowerCase()
+    if (statusLower.includes('live') || statusLower.includes('in progress')) {
+      return { level: 'LIVE', percent: 75, color: '#00d4ff' }
+    }
+    if (statusLower.includes('finished') || statusLower.includes('complete') || statusLower.includes('closed')) {
+      return { level: 'COMPLETED', percent: 100, color: '#00ff88' }
+    }
     return { level: 'UPCOMING', percent: 0, color: '#ffa500' }
   }
 
