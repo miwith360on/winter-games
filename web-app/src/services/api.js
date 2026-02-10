@@ -141,6 +141,12 @@ const detectDnfType = (text) => {
 
 // Venue/Event Data - Fetch from Winter Sports Schedule
 export const getVenues = async () => {
+  console.log('🔄 Fetching venues from SportsRadar...', {
+    hasApiKey: !!SPORTRADAR_API_KEY,
+    apiKeyLength: SPORTRADAR_API_KEY?.length || 0,
+    accessLevel: ACCESS_LEVEL
+  });
+  
   try {
     // Fetch winter sports seasons first
     const seasonsUrl = `${SPORTRADAR_BASE.winterSports}/seasons.json`;
@@ -155,8 +161,20 @@ export const getVenues = async () => {
         const scheduleResult = await fetchSportsRadar(scheduleUrl);
         
         if (scheduleResult.success && scheduleResult.data.sport_events) {
+          const now = new Date();
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          
+          // Filter out events older than yesterday (keep today, live, and future)
+          const relevantEvents = scheduleResult.data.sport_events.filter(event => {
+            if (!event.scheduled) return true; // Keep events without dates
+            const eventDate = new Date(event.scheduled);
+            return eventDate >= yesterday; // Keep yesterday onwards (for recent finished games)
+          });
+          
           // Map SportsRadar events to our venue format
-          let allEvents = scheduleResult.data.sport_events.map((event, idx) => ({
+          let allEvents = relevantEvents.map((event, idx) => ({
             id: idx + 1,
             name: event.sport_event_context?.venue?.name || 'Unknown Venue',
             sport: event.sport_event_context?.discipline?.name || 'Winter Sport',
@@ -189,6 +207,7 @@ export const getVenues = async () => {
           const venues = allEvents.slice(0, 10);
           
           if (venues.length > 0) {
+            console.log('✅ Got real data from SportsRadar:', venues.length, 'events');
             return { success: true, data: venues, source: 'sportradar' };
           }
         }
@@ -199,8 +218,10 @@ export const getVenues = async () => {
   }
 
   // Fallback to mock data
+  console.log('⚠️ Using mock venue data - API did not return data');
   return {
     success: true,
+    source: 'mock',
     data: [
       {
         id: 1,

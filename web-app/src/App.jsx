@@ -31,6 +31,8 @@ export default function App() {
   const [dnfData, setDnfData] = useState([])
   const [loading, setLoading] = useState(true)
   const [venueWeather, setVenueWeather] = useState(null)
+  const [dataSource, setDataSource] = useState('loading')
+  const [lastUpdate, setLastUpdate] = useState(null)
 
   // Fetch all data on component mount
   useEffect(() => {
@@ -74,10 +76,14 @@ export default function App() {
         getDNFandDQ(),
       ])
 
-      if (venuesRes.success && Array.isArray(venuesRes.data)) setVenues(venuesRes.data)
+      if (venuesRes.success && Array.isArray(venuesRes.data)) {
+        setVenues(venuesRes.data)
+        setDataSource(venuesRes.source || 'unknown')
+      }
       if (medalsRes.success && Array.isArray(medalsRes.data)) setMedalData(medalsRes.data)
       if (injuriesRes.success && Array.isArray(injuriesRes.data)) setInjuries(injuriesRes.data)
       if (dnfRes.success && Array.isArray(dnfRes.data)) setDnfData(dnfRes.data)
+      setLastUpdate(new Date())
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
@@ -121,6 +127,11 @@ export default function App() {
       <header className="app-header">
         <h1>❄️ Winter Games</h1>
         <p>Live Event Tracker</p>
+        {lastUpdate && (
+          <p style={{ fontSize: '11px', opacity: 0.7, marginTop: '4px' }}>
+            {dataSource === 'sportradar' ? '🟢 Live Data' : '🔵 Mock Data'} • Updated {lastUpdate.toLocaleTimeString()}
+          </p>
+        )}
       </header>
 
       {(Array.isArray(venues) ? venues : []).map((venue) => {
