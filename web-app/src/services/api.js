@@ -7,11 +7,14 @@ const ACCESS_LEVEL = import.meta.env.VITE_SPORTRADAR_ACCESS_LEVEL || 'trial';
 const GNEWS_API_KEY = import.meta.env.VITE_GNEWS_API_KEY || '';
 const OPENWEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY || '';
 
-// SportsRadar API Endpoints
+// Use backend proxy endpoints instead of calling SportsRadar directly (avoids CORS)
+const API_BASE = '/api/sportradar';
+
+// SportsRadar API Endpoints (kept for reference)
 const SPORTRADAR_BASE = {
-  winterSports: `https://api.sportradar.com/wintersports/${ACCESS_LEVEL}/v1/en`,
-  olympics: `https://api.sportradar.com/olympics/${ACCESS_LEVEL}/v1/en`,
-  iceHockey: `https://api.sportradar.com/icehockey/${ACCESS_LEVEL}/v3/en`,
+  winterSports: `https://api.sportradar.com/wintersports/trial/v1/en`,
+  olympics: `https://api.sportradar.com/olympics/trial/v1/en`,
+  iceHockey: `https://api.sportradar.com/icehockey/trial/v3/en`,
 };
 
 const GNEWS_BASE_URL = 'https://gnews.io/api/v4/search';
@@ -40,11 +43,19 @@ const getEventPriority = (status) => {
   return 4; // Unknown status
 };
 
-// Generic fetch function with error handling for SportsRadar API
+// Generic fetch function with error handling for SportsRadar API (via backend proxy)
 const fetchSportsRadar = async (url, useMockOnFail = true) => {
   try {
-    const fullUrl = `${url}${url.includes('?') ? '&' : '?'}api_key=${SPORTRADAR_API_KEY}`;
-    const response = await fetch(fullUrl, {
+    // Extract the path from the full URL to send to our backend proxy
+    let path = url;
+    if (url.startsWith('http')) {
+      // Extract path after the domain
+      const urlObj = new URL(url);
+      path = urlObj.pathname + urlObj.search;
+    }
+    
+    // Call our backend proxy instead of SportsRadar directly
+    const response = await fetch(`${API_BASE}${path}`, {
       headers: {
         'Accept': 'application/json',
       },
@@ -140,8 +151,8 @@ const detectDnfType = (text) => {
 };
 
 // Venue/Event Data - Fetch from Winter Sports Schedule
-export const getVenues = async () => {
-  console.log('🔄 Fetching venues from SportsRadar...', {
+export const getVenues = async () => { (using backend proxy)
+    const seasonsUrl = `/wintersports/trial/v1/en {
     hasApiKey: !!SPORTRADAR_API_KEY,
     apiKeyLength: SPORTRADAR_API_KEY?.length || 0,
     accessLevel: ACCESS_LEVEL
@@ -156,8 +167,8 @@ export const getVenues = async () => {
       // Get the latest season
       const latestSeason = seasonsResult.data.seasons?.[0];
       if (latestSeason && latestSeason.stage_id) {
-        // Fetch schedule for the season
-        const scheduleUrl = `${SPORTRADAR_BASE.winterSports}/stage/${latestSeason.stage_id}/schedule.json`;
+        // Fetch schedule for the season (using backend proxy)
+        const scheduleUrl = `/wintersports/trial/v1/en/stage/${latestSeason.stage_id}/schedule.json`;
         const scheduleResult = await fetchSportsRadar(scheduleUrl);
         
         if (scheduleResult.success && scheduleResult.data.sport_events) {
@@ -275,8 +286,8 @@ export const getVenues = async () => {
 // Medal Standings - Fetch from Olympic Medals API
 export const getMedalStandings = async () => {
   try {
-    // First get Olympic seasons to find Winter 2026
-    const seasonsUrl = `${SPORTRADAR_BASE.olympics}/seasons.json`;
+    // First get Olympic seasons to find Winter 2026 (using backend proxy)
+    const seasonsUrl = `/olympics/trial/v1/en/seasons.json`;
     const seasonsResult = await fetchSportsRadar(seasonsUrl);
     
     if (seasonsResult.success && !seasonsResult.useMock) {
@@ -287,8 +298,8 @@ export const getMedalStandings = async () => {
       
       const targetSeason = winterSeasons?.[0];
       if (targetSeason && targetSeason.id) {
-        // Fetch medal table for this season
-        const medalUrl = `${SPORTRADAR_BASE.olympics}/season/${targetSeason.id}/table.json`;
+        // Fetch medal table for this season (using backend proxy)
+        const medalUrl = `/olympics/trial/v1/en/season/${targetSeason.id}/table.json`;
         const medalResult = await fetchSportsRadar(medalUrl);
         
         if (medalResult.success && medalResult.data.standings) {
