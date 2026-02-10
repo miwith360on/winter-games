@@ -122,8 +122,7 @@ const fetchOpenWeather = async (lat, lon) => {
 const extractHeadlineSubject = (title) => {
   if (!title) return 'Winter Games';
   const cleaned = title.split(' - ')[0].split(' — ')[0].trim();
-  const words = cleaned.split(/
-|\s+/).filter(Boolean);
+  const words = cleaned.split(/\n|\s+/).filter(Boolean);
   return words.slice(0, 4).join(' ');
 };
 
