@@ -52,10 +52,10 @@ export default function App() {
         getDNFandDQ(),
       ])
 
-      if (venuesRes.success) setVenues(venuesRes.data)
-      if (medalsRes.success) setMedalData(medalsRes.data)
-      if (injuriesRes.success) setInjuries(injuriesRes.data)
-      if (dnfRes.success) setDnfData(dnfRes.data)
+      if (venuesRes.success && Array.isArray(venuesRes.data)) setVenues(venuesRes.data)
+      if (medalsRes.success && Array.isArray(medalsRes.data)) setMedalData(medalsRes.data)
+      if (injuriesRes.success && Array.isArray(injuriesRes.data)) setInjuries(injuriesRes.data)
+      if (dnfRes.success && Array.isArray(dnfRes.data)) setDnfData(dnfRes.data)
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
@@ -63,16 +63,16 @@ export default function App() {
     }
   }
 
-  // Combine injury data and DNF alerts
+  // Combine injury data and DNF alerts - with safety checks
   const alerts = [
-    ...injuries.map(injury => ({
+    ...(Array.isArray(injuries) ? injuries : []).map(injury => ({
       id: `injury-${injury.id}`,
       icon: injury.severity === 'severe' ? '🚨' : '⚠️',
       text: `${injury.athlete} (${injury.flag} ${injury.country}): ${injury.injury} - ${injury.status}`,
       type: 'injury',
       details: injury.details,
     })),
-    ...dnfData.map(dnf => ({
+    ...(Array.isArray(dnfData) ? dnfData : []).map(dnf => ({
       id: `dnf-${dnf.id}`,
       icon: dnf.type === 'DQ' ? '❌' : '⚠️',
       text: `${dnf.athlete} (${dnf.flag} ${dnf.country}) - ${dnf.type} in ${dnf.event}`,
@@ -94,7 +94,7 @@ export default function App() {
         <p>Live Event Tracker</p>
       </header>
 
-      {venues.map((venue) => {
+      {(Array.isArray(venues) ? venues : []).map((venue) => {
         const risk = getRiskLevel(venue)
         return (
           <div 
@@ -156,7 +156,7 @@ export default function App() {
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; OpenStreetMap contributors'
       />
-      {venues.map((venue) => (
+      {(Array.isArray(venues) ? venues : []).map((venue) => (
         <Marker
           key={venue.id}
           position={[venue.latitude, venue.longitude]}
@@ -197,7 +197,7 @@ export default function App() {
             </tr>
           </thead>
           <tbody>
-            {medalData.map((row) => (
+            {(Array.isArray(medalData) ? medalData : []).map((row) => (
               <tr key={row.rank}>
                 <td className="rank">{row.rank}</td>
                 <td className="country">{row.flag} {row.country}</td>
@@ -214,7 +214,7 @@ export default function App() {
       {/* Why Countries Are Winning Section */}
       <div style={{ marginTop: '20px' }}>
         <h2 style={{ fontSize: '18px', marginBottom: '12px', color: '#333' }}>🔍 Why Are They Winning?</h2>
-        {medalData.slice(0, 5).map((country) => country.whyWinning && (
+        {(Array.isArray(medalData) ? medalData : []).slice(0, 5).map((country) => country.whyWinning && (
           <div key={country.rank} className="country-analysis">
             <h3>{country.flag} {country.country}</h3>
             <p className="analysis-text">{country.whyWinning}</p>
@@ -241,7 +241,7 @@ export default function App() {
         <div className="no-alerts">No alerts at this time ✅</div>
       ) : (
         <>
-          {alerts.map((alert) => (
+          {(Array.isArray(alerts) ? alerts : []).map((alert) => (
             <div key={alert.id} className="alert-card">
               <span className="alert-icon">{alert.icon}</span>
               <div className="alert-content">
@@ -256,7 +256,7 @@ export default function App() {
 
       {/* Separate DNF/DQ Section */}
       <h2 style={{ marginTop: '30px', fontSize: '18px', color: '#333' }}>❌ DNF & DQ Reports</h2>
-      {dnfData.map((item) => (
+      {(Array.isArray(dnfData) ? dnfData : []).map((item) => (
         <div key={item.id} className="dnf-card">
           <div className="dnf-header">
             <span className={`dnf-badge ${item.type.toLowerCase()}`}>{item.type}</span>
