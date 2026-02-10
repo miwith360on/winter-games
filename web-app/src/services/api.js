@@ -26,6 +26,15 @@ const getCountryFlag = (countryCode) => {
   return flagMap[countryCode] || '🏴';
 };
 
+// Helper function to prioritize events (live > upcoming > finished)
+const getEventPriority = (status) => {
+  const statusLower = (status || '').toLowerCase();
+  if (statusLower.includes('live') || statusLower.includes('in progress')) return 1;
+  if (statusLower.includes('scheduled') || statusLower.includes('upcoming') || statusLower.includes('starts')) return 2;
+  if (statusLower.includes('finished') || statusLower.includes('closed') || statusLower.includes('complete')) return 3;
+  return 4; // Unknown status
+};
+
 // Generic fetch function with error handling for SportsRadar API
 const fetchSportsRadar = async (url, useMockOnFail = true) => {
   try {
@@ -69,7 +78,7 @@ export const getVenues = async () => {
         
         if (scheduleResult.success && scheduleResult.data.sport_events) {
           // Map SportsRadar events to our venue format
-          const venues = scheduleResult.data.sport_events.slice(0, 10).map((event, idx) => ({
+          let allEvents = scheduleResult.data.sport_events.map((event, idx) => ({
             id: idx + 1,
             name: event.sport_event_context?.venue?.name || 'Unknown Venue',
             sport: event.sport_event_context?.discipline?.name || 'Winter Sport',
@@ -84,7 +93,22 @@ export const getVenues = async () => {
             term: `${event.sport_event_context?.discipline?.name || ''} event`,
             attendance: 0,
             temperature: '-5°C',
+            scheduledTime: event.scheduled,
+            priority: getEventPriority(event.sport_event_status?.status),
           }));
+          
+          // Sort by priority (live first, then upcoming, then recent finished)
+          // Then by scheduled time for events in same priority
+          allEvents.sort((a, b) => {
+            if (a.priority !== b.priority) return a.priority - b.priority;
+            // Within same priority, sort by time (upcoming: earliest first, finished: latest first)
+            if (a.priority === 2) return new Date(a.scheduledTime) - new Date(b.scheduledTime); // upcoming
+            if (a.priority === 3) return new Date(b.scheduledTime) - new Date(a.scheduledTime); // finished (latest first)
+            return 0;
+          });
+          
+          // Take top 10 most relevant events
+          const venues = allEvents.slice(0, 10);
           
           if (venues.length > 0) {
             return { success: true, data: venues, source: 'sportradar' };
