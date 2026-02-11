@@ -151,16 +151,16 @@ const detectDnfType = (text) => {
 };
 
 // Venue/Event Data - Fetch from Winter Sports Schedule
-export const getVenues = async () => { (using backend proxy)
-    const seasonsUrl = `/wintersports/trial/v1/en {
+export const getVenues = async () => {
+  console.log('🔄 Fetching venues from SportsRadar...', {
     hasApiKey: !!SPORTRADAR_API_KEY,
     apiKeyLength: SPORTRADAR_API_KEY?.length || 0,
     accessLevel: ACCESS_LEVEL
   });
   
   try {
-    // Fetch winter sports seasons first
-    const seasonsUrl = `${SPORTRADAR_BASE.winterSports}/seasons.json`;
+    // Fetch winter sports seasons first (using backend proxy)
+    const seasonsUrl = `/wintersports/trial/v1/en/seasons.json`;
     const seasonsResult = await fetchSportsRadar(seasonsUrl);
     
     if (seasonsResult.success && !seasonsResult.useMock) {
