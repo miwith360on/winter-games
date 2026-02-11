@@ -10,6 +10,10 @@ const OPENWEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY || '';
 // Use backend proxy endpoints instead of calling SportsRadar directly (avoids CORS)
 const API_BASE = '/api/sportradar';
 
+// Free Alternative APIs for Olympic Data
+const THESPORTSDB_BASE = 'https://www.thesportsdb.com/api/v1/json/3';
+const OLYMPICS_RSS = 'https://olympics.com/en/rss/news';
+
 // SportsRadar API Endpoints (kept for reference)
 const SPORTRADAR_BASE = {
   winterSports: `https://api.sportradar.com/wintersports/trial/v1/en`,
@@ -130,11 +134,63 @@ const fetchOpenWeather = async (lat, lon) => {
   }
 };
 
+// Fetch from TheSportsDB (Free API for Olympic Events)
+const fetchTheSportsDB = async (endpoint) => {
+  try {
+    const response = await fetch(`${THESPORTSDB_BASE}${endpoint}`);
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status}`);
+    }
+    const data = await response.json();
+    return { success: true, data, source: 'thesportsdb' };
+  } catch (error) {
+    console.error('TheSportsDB API Error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Fetch Olympic News as Live Updates
+const fetchOlympicNews = async () => {
+  if (!GNEWS_API_KEY) {
+    return { success: false, data: [] };
+  }
+  
+  try {
+    const params = new URLSearchParams({
+      q: 'Winter Olympics 2026 Milan',
+      lang: 'en',
+      max: '20',
+      token: GNEWS_API_KEY,
+      sortby: 'publishedAt',
+    });
+    const response = await fetch(`${GNEWS_BASE_URL}?${params.toString()}`);
+    
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return { success: true, data: data.articles || [], source: 'gnews' };
+  } catch (error) {
+    console.error('Olympic News API Error:', error);
+    return { success: false, data: [] };
+  }
+};
+
 const extractHeadlineSubject = (title) => {
   if (!title) return 'Winter Games';
   const cleaned = title.split(' - ')[0].split(' — ')[0].trim();
   const words = cleaned.split(/\n|\s+/).filter(Boolean);
   return words.slice(0, 4).join(' ');
+};
+
+const extractSportFromTitle = (title) => {
+  const sports = ['Hockey', 'Skiing', 'Skating', 'Snowboard', 'Curling', 'Bobsled', 'Luge', 'Biathlon', 'Figure Skating'];
+  const lowerTitle = (title || '').toLowerCase();
+  for (const sport of sports) {
+    if (lowerTitle.includes(sport.toLowerCase())) return sport;
+  }
+  return 'Winter Sport';
 };
 
 const detectSeverity = (text) => {
@@ -152,22 +208,16 @@ const detectDnfType = (text) => {
 
 // Venue/Event Data - Fetch from Winter Sports Schedule
 export const getVenues = async () => {
-  console.log('🔄 Fetching venues from SportsRadar...', {
-    hasApiKey: !!SPORTRADAR_API_KEY,
-    apiKeyLength: SPORTRADAR_API_KEY?.length || 0,
-    accessLevel: ACCESS_LEVEL
-  });
+  console.log('🔄 Fetching venues from multiple sources...');
   
+  // Try 1: SportsRadar (trial)
   try {
-    // Fetch winter sports seasons first (using backend proxy)
     const seasonsUrl = `/wintersports/trial/v1/en/seasons.json`;
     const seasonsResult = await fetchSportsRadar(seasonsUrl);
     
     if (seasonsResult.success && !seasonsResult.useMock) {
-      // Get the latest season
       const latestSeason = seasonsResult.data.seasons?.[0];
       if (latestSeason && latestSeason.stage_id) {
-        // Fetch schedule for the season (using backend proxy)
         const scheduleUrl = `/wintersports/trial/v1/en/stage/${latestSeason.stage_id}/schedule.json`;
         const scheduleResult = await fetchSportsRadar(scheduleUrl);
         
@@ -177,14 +227,12 @@ export const getVenues = async () => {
           const yesterday = new Date(today);
           yesterday.setDate(yesterday.getDate() - 1);
           
-          // Filter out events older than yesterday (keep today, live, and future)
           const relevantEvents = scheduleResult.data.sport_events.filter(event => {
-            if (!event.scheduled) return true; // Keep events without dates
+            if (!event.scheduled) return true;
             const eventDate = new Date(event.scheduled);
-            return eventDate >= yesterday; // Keep yesterday onwards (for recent finished games)
+            return eventDate >= yesterday;
           });
           
-          // Map SportsRadar events to our venue format
           let allEvents = relevantEvents.map((event, idx) => ({
             id: idx + 1,
             name: event.sport_event_context?.venue?.name || 'Unknown Venue',
@@ -204,17 +252,13 @@ export const getVenues = async () => {
             priority: getEventPriority(event.sport_event_status?.status),
           }));
           
-          // Sort by priority (live first, then upcoming, then recent finished)
-          // Then by scheduled time for events in same priority
           allEvents.sort((a, b) => {
             if (a.priority !== b.priority) return a.priority - b.priority;
-            // Within same priority, sort by time (upcoming: earliest first, finished: latest first)
-            if (a.priority === 2) return new Date(a.scheduledTime) - new Date(b.scheduledTime); // upcoming
-            if (a.priority === 3) return new Date(b.scheduledTime) - new Date(a.scheduledTime); // finished (latest first)
+            if (a.priority === 2) return new Date(a.scheduledTime) - new Date(b.scheduledTime);
+            if (a.priority === 3) return new Date(b.scheduledTime) - new Date(a.scheduledTime);
             return 0;
           });
           
-          // Take top 10 most relevant events
           const venues = allEvents.slice(0, 10);
           
           if (venues.length > 0) {
@@ -225,11 +269,78 @@ export const getVenues = async () => {
       }
     }
   } catch (error) {
-    console.error('Error fetching venues from SportsRadar:', error);
+    console.error('SportsRadar Error:', error);
   }
 
-  // Fallback to mock data
-  console.log('⚠️ Using mock venue data - API did not return data');
+  // Try 2: TheSportsDB for Olympic Events
+  console.log('🔄 Trying TheSportsDB...');
+  try {
+    const dbResult = await fetchTheSportsDB('/eventsseason.php?id=4424&s=2025-2026');
+    if (dbResult.success && dbResult.data.events) {
+      const olympicEvents = dbResult.data.events
+        .filter(event => event.strSport && event.strLeague?.includes('Winter'))
+        .slice(0, 10)
+        .map((event, idx) => ({
+          id: idx + 1,
+          name: event.strVenue || 'Olympic Venue',
+          sport: event.strSport || 'Winter Sport',
+          event: event.strEvent || 'Olympic Event',
+          status: event.strStatus || 'Scheduled',
+          latitude: 45.4642,
+          longitude: 9.1900,
+          score: event.intHomeScore && event.intAwayScore ? 
+            `${event.intHomeScore} - ${event.intAwayScore}` : 'TBD',
+          winner: event.strWinner || null,
+          why: 'Real event data from TheSportsDB',
+          term: `${event.strSport} competition`,
+          attendance: parseInt(event.intSpectators) || 0,
+          temperature: '-5°C',
+          scheduledTime: event.dateEvent,
+          priority: getEventPriority(event.strStatus),
+        }));
+      
+      if (olympicEvents.length > 0) {
+        console.log('✅ Got real data from TheSportsDB:', olympicEvents.length, 'events');
+        return { success: true, data: olympicEvents, source: 'thesportsdb' };
+      }
+    }
+  } catch (error) {
+    console.error('TheSportsDB Error:', error);
+  }
+
+  // Try 3: Use Olympic News as Event Updates
+  console.log('🔄 Trying Olympic News...');
+  try {
+    const newsResult = await fetchOlympicNews();
+    if (newsResult.success && newsResult.data.length > 0) {
+      const newsEvents = newsResult.data.slice(0, 8).map((article, idx) => ({
+        id: idx + 1,
+        name: 'Milan Olympic Venue',
+        sport: extractSportFromTitle(article.title),
+        event: article.title.substring(0, 50),
+        status: article.publishedAt ? 'Recent Update' : 'Live',
+        latitude: 45.4642,
+        longitude: 9.1900,
+        score: 'See News',
+        winner: null,
+        why: article.description || 'Latest Olympic update',
+        term: extractSportFromTitle(article.title) + ' news',
+        attendance: 0,
+        temperature: '-5°C',
+        scheduledTime: article.publishedAt,
+        priority: 2,
+        newsUrl: article.url,
+      }));
+      
+      console.log('✅ Got updates from Olympic News:', newsEvents.length, 'stories');
+      return { success: true, data: newsEvents, source: 'news' };
+    }
+  } catch (error) {
+    console.error('Olympic News Error:', error);
+  }
+
+  // Fallback: Enhanced Mock Data with realistic current events
+  console.log('⚠️ Using enhanced mock data with simulated live updates');
   return {
     success: true,
     source: 'mock',
@@ -578,9 +689,34 @@ export const getPerformanceAnalytics = async (eventId) => {
 
 // Live Events Stream
 export const getLiveEvents = async () => {
-  // Return mock data directly
+  // Try to fetch real Olympic news as "live" updates
+  console.log('🔄 Fetching live Olympic updates from news...');
+  try {
+    const newsResult = await fetchOlympicNews();
+    if (newsResult.success && newsResult.data.length > 0) {
+      const liveUpdates = newsResult.data.slice(0, 5).map((article, idx) => ({
+        id: idx + 1,
+        sport: extractSportFromTitle(article.title),
+        event: article.title.substring(0, 60),
+        status: 'Breaking News',
+        score: 'Latest Update',
+        time: new Date(article.publishedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        venue: 'Milan 2026',
+        description: article.description,
+        url: article.url,
+      }));
+      
+      console.log('✅ Got live updates from news:', liveUpdates.length);
+      return { success: true, data: liveUpdates, source: 'news' };
+    }
+  } catch (error) {
+    console.error('Live Events Error:', error);
+  }
+
+  // Fallback to mock data
   return {
       success: true,
+      source: 'mock',
       data: [
         {
           id: 1,
